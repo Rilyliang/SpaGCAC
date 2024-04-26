@@ -148,18 +148,6 @@ class Encoder(Module):
 
         emb_a = self.act(z_a)
 
-        # 1-hop(1GCN)
-        z_mask = F.dropout(feat_mask, self.dropout, self.training)
-        z_mask = torch.mm(z_mask, self.weight2_1)
-        z_mask = torch.mm((self.lamda1 * identify_matrix + self.lamda2 * adj), z_mask) # I+A
-
-        z_mask = self.act(z_mask)
-        z_mask = F.dropout(z_mask, self.dropout, self.training)
-        z_mask = torch.mm(z_mask, self.weight2_2)
-        z_mask = torch.mm((self.lamda1 * identify_matrix + self.lamda2 * adj), z_mask) # I+A
-
-        emb_mask = self.act(z_mask)
-
         g = self.read(emb, self.graph_neigh)
         g = self.sigm(g)  
 
