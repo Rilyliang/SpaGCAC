@@ -91,92 +91,6 @@ def construct_interaction_KNN(adata, n_neighbors=3):
     print('Graph constructed!')
 
 
-def add_contrastive_label(adata):
-    # contrastive label
-    n_spot = adata.n_obs
-    one_matrix = np.ones([n_spot, 1])
-    zero_matrix = np.zeros([n_spot, 1])
-    label_CSL = np.concatenate([one_matrix, zero_matrix], axis=1)
-    adata.obsm['label_CSL'] = label_CSL
-
-def add_contrastive_label1(adata):
-    # contrastive label
-    n_spot = adata.n_obs
-    one_matrix = np.ones([n_spot, 1])
-    zero_matrix = np.ones([n_spot, 1])
-    label_CSL = np.concatenate([one_matrix, zero_matrix], axis=1)
-    adata.obsm['label_CSL1'] = label_CSL
-
-
-
-def get_feature(adata, deconvolution=False):
-    if deconvolution:
-        adata_Vars = adata
-    else:
-        adata_Vars = adata[:, adata.var['highly_variable']]
-
-    if isinstance(adata_Vars.X, csc_matrix) or isinstance(adata_Vars.X, csr_matrix):
-        feat = adata_Vars.X.toarray()[:, ]
-    else:
-        feat = adata_Vars.X[:, ]
-
-        # data augmentation
-    feat_a = permutation(feat)  # 随机打乱下标生成增强后的数据
-
-    adata.obsm['feat'] = feat
-    adata.obsm['feat_a'] = feat_a
-
-
-
-def build_mask(gene_num, masked_percentage):
-    mask = np.concatenate([np.ones(int(gene_num * masked_percentage), dtype=bool),
-                           np.zeros(gene_num - int(gene_num * masked_percentage), dtype=bool)])
-    np.random.shuffle(mask)
-    return mask
-
-def random_pos(adata,
-               mask_percentage = 0.15,
-               apply_mask_prob = 1.0,
-               ):
-
-    adata_Vars = adata[:, adata.var['highly_variable']]
-    cell_profile = sp.csc_matrix(adata_Vars.X.copy())
-    # sparse.csc_matrix(dense_array)
-    gene_num = adata_Vars.shape[1]
-    cell_num = adata_Vars.shape[0]
-
-    s = np.random.uniform(0, 1)
-    if s < apply_mask_prob:
-        # create the mask for mutation
-        mask = build_mask(gene_num, mask_percentage)
-        # do the mutation with prob
-        cell_profile[mask] = 0
-
-    adata.obsm['feat_pos'] = cell_profile.toarray()
-
-def _nan2inf(x):
-    return torch.where(torch.isnan(x), torch.zeros_like(x) + np.inf, x)
-
-class NB(object):
-    def __init__(self, theta=None, scale_factor=1.0):
-        super(NB, self).__init__()
-        self.eps = 1e-10
-        self.scale_factor = scale_factor
-        self.theta = theta
-
-    def loss(self, y_true, y_pred, mean=True):
-        y_pred = y_pred * self.scale_factor
-        theta = torch.minimum(self.theta, torch.tensor(1e6))
-        t1 = torch.lgamma(theta + self.eps) + torch.lgamma(y_true + 1.0) - torch.lgamma(y_true + theta + self.eps)
-        t2 = (theta + y_true) * torch.log(1.0 + (y_pred / (theta + self.eps))) + (
-                y_true * (torch.log(theta + self.eps) - torch.log(y_pred + self.eps)))
-        final = t1 + t2
-        final = _nan2inf(final)
-        if mean:
-            final = torch.mean(final)
-        return final
-
-
 class ZINB(NB):
     def __init__(self, pi, ridge_lambda=0.0, **kwargs):
         super().__init__(**kwargs)
@@ -276,37 +190,6 @@ def permutation(feature):
     
     return feature_permutated 
 
-    
-def normalize_adj(adj):
-    """Symmetrically normalize adjacency matrix."""
-    adj = sp.coo_matrix(adj)
-    rowsum = np.array(adj.sum(1))
-    d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-    adj = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)
-    return adj.toarray()
-
-def preprocess_adj(adj):
-    """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
-    adj_normalized = normalize_adj(adj)+np.eye(adj.shape[0])
-    return adj_normalized 
-
-def sparse_mx_to_torch_sparse_tensor(sparse_mx):
-    """Convert a scipy sparse matrix to a torch sparse tensor."""
-    sparse_mx = sparse_mx.tocoo().astype(np.float32)
-    indices = torch.from_numpy(np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
-    values = torch.from_numpy(sparse_mx.data)
-    shape = torch.Size(sparse_mx.shape)
-    return torch.sparse.FloatTensor(indices, values, shape)
-
-def preprocess_adj_sparse(adj):
-    adj = sp.coo_matrix(adj)
-    adj_ = adj + sp.eye(adj.shape[0])
-    rowsum = np.array(adj_.sum(1))
-    degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5).flatten())
-    adj_normalized = adj_.dot(degree_mat_inv_sqrt).transpose().dot(degree_mat_inv_sqrt).tocoo()
-    return sparse_mx_to_torch_sparse_tensor(adj_normalized)
 
 
     
